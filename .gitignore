@@ -1,0 +1,14 @@
+# Data files
+data/raw/
+data/processed/*.csv
+*.csv
+*.xlsx
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
