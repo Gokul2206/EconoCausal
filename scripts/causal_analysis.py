@@ -12,6 +12,19 @@ customer_final = pd.read_csv('data/processed/customer_data.csv')
 print(f"✓ Loaded: {len(customer_final)} customers")
 print(f"✓ Columns: {len(customer_final.columns)}")
 
+# DATA QUALITY CHECK
+print("\n" + "="*70)
+print("DATA QUALITY CHECK")
+print("="*70)
+
+print("\nOutcome (purchase_made) distribution:")
+print(customer_final['purchase_made'].value_counts())
+print(f"Repeat purchase rate: {customer_final['purchase_made'].mean():.1%}")
+
+print("\nTreatment (discount_given) distribution:")
+print(customer_final['discount_given'].value_counts())
+print(f"Discount rate: {customer_final['discount_given'].mean():.1%}")
+
 # Define causal graph
 print("\n" + "="*70)
 print("CAUSAL GRAPH (DAG)")
@@ -64,7 +77,7 @@ print("="*70)
 print("""
 ✅ Data: 95,146 customers
 ✅ Treatment: discount_given (binary: 0 or 1)
-✅ Outcome: purchase_made (binary: 0 or 1)
+✅ Outcome: purchase_made (binary: repeat purchase 0 or 1)
 ✅ Confounders: income_proxy, tenure_days, engagement_score, favorite_season
 
 ✅ Causal Effect: IDENTIFIABLE

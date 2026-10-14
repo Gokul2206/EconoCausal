@@ -96,13 +96,23 @@ customer_final = df.groupby('customer_id').agg({
     'customer_state': 'first',
     'income_proxy': 'first',
     'season': lambda x: x.mode()[0] if len(x.mode()) > 0 else 'Spring',
-    'discount_given': 'mean',
+    'discount_given': 'max',  # FIXED: was 'mean', now 'max'
     'discount_amount': 'mean',
     'price': 'mean'
 }).reset_index()
 
 customer_final = customer_final.merge(customer_tenure.reset_index(), on='customer_id')
-customer_final['purchase_made'] = 1
+
+# FIXED: Engineer outcome properly - repeat purchase (bought 2+ times)
+customer_final['purchase_made'] = (customer_final['purchase_frequency'] > 1).astype(int)
+
+# Rename columns
+customer_final.columns = ['customer_id', 'customer_state', 'income_proxy', 'favorite_season',
+                          'discount_given', 'discount_amount', 'avg_price',
+                          'first_order_date', 'last_order_date', 'tenure_days',
+                          'purchase_frequency', 'engagement_score', 'purchase_made']
+
+print(f"✓ Aggregated to {len(customer_final)} customers")
 
 # Rename columns
 customer_final.columns = ['customer_id', 'customer_state', 'income_proxy', 'favorite_season',
