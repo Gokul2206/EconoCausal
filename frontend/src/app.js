@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import './app.css';
+import './App.css';
+
+// Causal model from scripts/causal_analysis.py
+const causalModel = {
+  treatment: 'discount_given',
+  outcome: 'purchase_made',
+  confounders: ['income_proxy', 'tenure_days', 'favorite_season'],
+};
 
 function App() {
   const [file, setFile] = useState(null);
@@ -19,12 +26,12 @@ function App() {
         const csv = event.target.result;
         const lines = csv.split('\n');
         const headers = lines[0].split(',');
-        const dataRows = lines.slice(1).filter(line => line.trim()).length;
+        const dataRows = lines.slice(1).filter((line) => line.trim()).length;
 
         setData({
           filename: file.name,
           rows: dataRows,
-          columns: headers.length
+          columns: headers.length,
         });
       } catch (err) {
         alert('Error reading file');
@@ -74,10 +81,35 @@ function App() {
                 step="1000"
               />
             </div>
-            <div className="budget-display">
-              ${budget.toLocaleString()}
-            </div>
+            <div className="budget-display">${budget.toLocaleString()}</div>
           </div>
+        </div>
+
+        <div className="dag-panel">
+          <h2>📐 Causal Graph (DAG)</h2>
+
+          <div className="dag-node dag-treatment">
+            <span className="dag-label">Treatment</span>
+            <code>{causalModel.treatment}</code>
+          </div>
+
+          <div className="dag-node dag-outcome">
+            <span className="dag-label">Outcome</span>
+            <code>{causalModel.outcome}</code>
+          </div>
+
+          <div className="dag-node dag-confounders">
+            <span className="dag-label">Confounders</span>
+            {causalModel.confounders.map((c) => (
+              <code key={c}>{c}</code>
+            ))}
+          </div>
+
+          <p className="dag-note">
+            Each confounder points to both <code>{causalModel.treatment}</code> and{' '}
+            <code>{causalModel.outcome}</code>. Adjusting for them closes the backdoor paths.
+          </p>
+          <p className="dag-status">✓ DoWhy backdoor adjustment set (see causal_analysis.py output)</p>
         </div>
 
         {data && (
@@ -86,16 +118,6 @@ function App() {
             <p><strong>File:</strong> {data.filename}</p>
             <p><strong>Customers:</strong> {data.rows.toLocaleString()}</p>
             <p><strong>Budget:</strong> ${budget.toLocaleString()}</p>
-            
-            <div className="causal-info">
-              <h4>📐 Week 1: Causal Model</h4>
-              <p>✓ DoWhy DAG defined</p>
-              <p>✓ Confounders identified: income, tenure, engagement, season</p>
-              <p>✓ Causal effect is identifiable</p>
-              <p style={{color: '#999', marginTop: '10px', fontSize: '0.9em'}}>
-                Next: Week 2 - Train DML models to estimate Individual Treatment Effects
-              </p>
-            </div>
           </div>
         )}
       </main>
