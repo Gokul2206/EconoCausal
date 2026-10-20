@@ -7,3 +7,4 @@ plotly>=5.19.0
 dowhy==0.8
 networkx==3.1
 python-dotenv>=1.0.0
+econml>=0.15.0
