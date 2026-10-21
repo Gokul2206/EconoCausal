@@ -1,70 +1,53 @@
 import pandas as pd
 from dowhy import CausalModel
 
-print("\n" + "=" * 70)
-print("WEEK 1: CAUSAL ANALYSIS WITH DOWHY")
+print("=" * 70)
+print("CAUSAL ANALYSIS: DAG ON MOCK DATA")
 print("=" * 70)
 
-# Load processed data
-print("\n📖 Loading processed data...")
-customer_final = pd.read_csv('data/processed/customer_data.csv')
+df = pd.read_csv('data/mock/mock_customers.csv')
 
-print(f"✓ Loaded: {len(customer_final)} customers")
-print(f"✓ Columns: {len(customer_final.columns)}")
+# Planted columns are for validation only. They must never be used here.
+PLANTED = ['true_ite', 'true_ite_10', 'true_ite_20']
+assert not any(c in df.columns and c in ['income_proxy', 'prior_orders', 'days_since_prev',
+                                          'prior_spend', 'order_season']
+               for c in PLANTED)
 
-# Data quality check
-print("\n" + "=" * 70)
-print("DATA QUALITY CHECK")
-print("=" * 70)
+# Encode season as numbers so the model can use it
+df['order_season'] = df['order_season'].astype('category').cat.codes
 
-print("\nOutcome (purchase_made) distribution:")
-print(customer_final['purchase_made'].value_counts())
-print(f"Repeat purchase rate: {customer_final['purchase_made'].mean():.1%}")
-
-print("\nTreatment (discount_given) distribution:")
-print(customer_final['discount_given'].value_counts())
-print(f"Discount rate: {customer_final['discount_given'].mean():.1%}")
-
-# Causal graph
-print("\n" + "=" * 70)
-print("CAUSAL GRAPH (DAG)")
-print("=" * 70)
+CONFOUNDERS = ['income_proxy', 'prior_orders', 'days_since_prev',
+               'prior_spend', 'order_season']
 
 causal_graph = """
 digraph {
 income_proxy -> discount_given;
 income_proxy -> purchase_made;
-tenure_days -> discount_given;
-tenure_days -> purchase_made;
-favorite_season -> discount_given;
-favorite_season -> purchase_made;
+prior_orders -> discount_given;
+prior_orders -> purchase_made;
+days_since_prev -> discount_given;
+days_since_prev -> purchase_made;
+prior_spend -> discount_given;
+prior_spend -> purchase_made;
+order_season -> discount_given;
+order_season -> purchase_made;
 discount_given -> purchase_made;
 }
 """
 
 print(causal_graph)
 
-# Create causal model
-print("=" * 70)
-print("CREATING CAUSAL MODEL")
-print("=" * 70)
-
 model = CausalModel(
-    data=customer_final,
+    data=df,
     treatment='discount_given',
     outcome='purchase_made',
-    common_causes=['income_proxy', 'tenure_days', 'favorite_season'],
-    graph=causal_graph
+    common_causes=CONFOUNDERS,
+    graph=causal_graph,
 )
 
-print("✓ CausalModel created")
-
-# Identify effect
-print("\n" + "=" * 70)
-print("IDENTIFYING CAUSAL EFFECT")
+print("=" * 70)
+print("IDENTIFIED ESTIMAND (backdoor adjustment set)")
 print("=" * 70)
 
-identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
-
-print("\n📍 IDENTIFIED ESTIMAND:")
-print(identified_estimand)
+estimand = model.identify_effect(proceed_when_unidentifiable=True)
+print(estimand)

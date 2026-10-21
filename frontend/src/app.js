@@ -1,17 +1,30 @@
 import React, { useState } from 'react';
-import './App.css';
+import './app.css';
 
-// Causal model from scripts/causal_analysis.py
+// Causal model from scripts/causal_analysis.py (mock data)
 const causalModel = {
   treatment: 'discount_given',
   outcome: 'purchase_made',
-  confounders: ['income_proxy', 'tenure_days', 'favorite_season'],
+  confounders: ['income_proxy', 'prior_orders', 'days_since_prev',
+                'prior_spend', 'order_season'],
 };
+
+const REQUIRED_COLUMNS = [
+  'discount_given',
+  'purchase_made',
+  'income_proxy',
+  'prior_orders',
+  'days_since_prev',
+  'prior_spend',
+  'order_season',
+];
 
 function App() {
   const [file, setFile] = useState(null);
   const [budget, setBudget] = useState(50000);
+  const [budgetError, setBudgetError] = useState('');
   const [data, setData] = useState(null);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleUpload = (e) => {
@@ -22,19 +35,21 @@ function App() {
     const reader = new FileReader();
 
     reader.onload = (event) => {
-      try {
-        const csv = event.target.result;
-        const lines = csv.split('\n');
-        const headers = lines[0].split(',');
-        const dataRows = lines.slice(1).filter((line) => line.trim()).length;
+      const csv = event.target.result;
+      const lines = csv.split('\n').filter((line) => line.trim());
+      const headers = lines[0].split(',').map((h) => h.trim());
+      const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
 
+      if (missing.length > 0) {
+        setData(null);
+        setError(`Missing required columns: ${missing.join(', ')}`);
+      } else {
+        setError('');
         setData({
           filename: file.name,
-          rows: dataRows,
+          rows: lines.length - 1,
           columns: headers.length,
         });
-      } catch (err) {
-        alert('Error reading file');
       }
       setLoading(false);
     };
@@ -66,7 +81,8 @@ function App() {
                 {loading ? 'Processing...' : 'Upload CSV'}
               </button>
             </form>
-            <p className="hint">Select customer_data.csv from data/processed/</p>
+            <p className="hint">Select mock_customers.csv from data/mock/</p>
+            {error && <p style={{ color: '#c62828', marginTop: '10px' }}>{error}</p>}
           </div>
 
           <div className="card">
@@ -76,11 +92,16 @@ function App() {
               <input
                 type="number"
                 value={budget}
-                onChange={(e) => setBudget(Number(e.target.value))}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  setBudget(value);
+                  setBudgetError(value <= 0 ? 'Budget must be greater than 0' : '');
+                }}
                 min="1000"
                 step="1000"
               />
             </div>
+            {budgetError && <p style={{ color: '#c62828', marginTop: '10px' }}>{budgetError}</p>}
             <div className="budget-display">${budget.toLocaleString()}</div>
           </div>
         </div>
