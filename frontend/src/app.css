@@ -175,3 +175,124 @@ button:disabled {
     font-size: 2em;
   }
 }
+.dag-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  margin-bottom: 40px;
+}
+
+.dag-panel h2 {
+  color: #667eea;
+  margin-bottom: 20px;
+  font-size: 1.5em;
+}
+
+.dag-node {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-left: 4px solid #667eea;
+  background: #f9f9f9;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.dag-treatment { border-left-color: #f38181; }
+.dag-outcome { border-left-color: #4ecdc4; }
+.dag-confounders { border-left-color: #764ba2; }
+
+.dag-label {
+  font-weight: 600;
+  color: #333;
+  min-width: 110px;
+}
+
+.dag-node code {
+  background: #eef0ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #444;
+}
+
+.dag-note {
+  color: #555;
+  margin-top: 16px;
+  line-height: 1.6;
+}
+
+.dag-status {
+  color: #2e7d32;
+  font-weight: 600;
+  margin-top: 10px;
+}
+.scores-card {
+  margin-top: 30px;
+  margin-bottom: 0;
+  padding: 24px 28px;
+}
+
+.scores-card h2 {
+  margin-bottom: 8px;
+}
+
+.scores-card .hint {
+  margin-top: 4px;
+  margin-bottom: 14px;
+}
+
+.scores-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 24px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.scores-row .histogram {
+  height: 160px;
+  margin-top: 0;
+}
+
+.scores-row .plot-wrap {
+  min-width: 0;
+}
+
+.filters {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.filters label {
+  color: #333;
+  font-weight: 500;
+}
+
+.filters select {
+  padding: 6px 10px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.95em;
+}
+
+.filters input[type="range"] {
+  vertical-align: middle;
+  width: 180px;
+}
+
+.summary-line {
+  color: #333;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 900px) {
+  .scores-row {
+    grid-template-columns: 1fr;
+  }
+}

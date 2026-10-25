@@ -1,17 +1,18 @@
-# Data files
+# Generated data (rebuilt by the run order)
+data/mock/
+data/processed/
+
+# Raw Olist files (large, not needed by the current pipeline)
 data/raw/
-data/processed/*.csv
-*.csv
-*.xlsx
+
+# Frontend build output and dependencies
+frontend/node_modules/
+frontend/build/
+
+# Python
+venv/
+__pycache__/
+*.pyc
 
 # Jupyter
 .ipynb_checkpoints/
-
-# Python
-__pycache__/
-*.pyc
-venv/
-.env
-node_modules/
-build/
-dist/

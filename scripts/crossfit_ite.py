@@ -2,12 +2,12 @@ import os
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
 from econml.dml import CausalForestDML
 
-from outcome_model import fit_outcome_model
-from treatment_model import fit_treatment_model
-from estimate_effects import ProbaRegressor, design
+from outcome_model import fit_outcome_model, OUTCOME_FEATURES
+from treatment_model import fit_treatment_model, TREATMENT_FEATURES
+from estimate_effects import OutcomeWrapper, TreatmentWrapper, design
 
 DATA_PATH = 'data/mock/mock_customers.csv'
 OUT_PATH = 'data/processed/ite_scores_crossfit.csv'
@@ -17,12 +17,18 @@ N_FOLDS = 5
 
 def main():
     df = pd.read_csv(DATA_PATH)
-    X = design(df)
+    X_df = design(df)
+    cols = list(X_df.columns)
+    X = X_df.values
     Y = df['purchase_made'].values
     T = df['discount_amount'].values
 
-    # Nuisance models chosen on a fixed 80% split, as before
-    from sklearn.model_selection import train_test_split
+    out_cols = [i for i, c in enumerate(cols)
+                if c in OUTCOME_FEATURES or c.startswith('season_')]
+    trt_cols = [i for i, c in enumerate(cols)
+                if c in TREATMENT_FEATURES or c.startswith('season_')]
+
+    # Nuisance models chosen on the fixed 80% training split, as in estimate_effects.py
     df_train, df_test = train_test_split(
         df, test_size=0.2, random_state=RANDOM_STATE,
         stratify=df['discount_amount'])
@@ -35,8 +41,8 @@ def main():
     kf = KFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     for fold, (tr, te) in enumerate(kf.split(X), start=1):
         forest = CausalForestDML(
-            model_y=ProbaRegressor(clone(outcome_fit)),
-            model_t=clone(treat_fit),
+            model_y=OutcomeWrapper(clone(outcome_fit), out_cols),
+            model_t=TreatmentWrapper(clone(treat_fit), trt_cols),
             discrete_treatment=True,
             cv=5,
             n_estimators=500,

@@ -6,7 +6,7 @@ from lightgbm import LGBMRegressor, LGBMClassifier
 warnings.filterwarnings('ignore')
 
 DATA_PATH = 'data/mock/mock_customers.csv'
-CONFOUNDERS = ['income', 'prior_orders', 'tenure_days', 'season']
+CONFOUNDERS = ['income', 'prior_orders', 'tenure_days', 'season', 'engagement_proxy']
 
 GRAPH = """
 digraph {
@@ -18,6 +18,8 @@ tenure_days -> treat;
 tenure_days -> purchase_made;
 season -> treat;
 season -> purchase_made;
+engagement_proxy -> treat;
+engagement_proxy -> purchase_made;
 treat -> purchase_made;
 }
 """
@@ -27,6 +29,8 @@ REFUTERS = [
     ('placebo_treatment_refuter', {'placebo_type': 'permute'}),
     ('data_subset_refuter', {'subset_fraction': 0.8}),
 ]
+
+SENSITIVITY_STRENGTHS = [0.05, 0.1, 0.2, 0.3]
 
 
 def lgbm_reg():
@@ -40,7 +44,6 @@ def lgbm_clf():
 
 
 def find_inner_estimator(estimate):
-    # DoWhy wraps the EconML object; find the wrapped class by checking attributes
     for name in ['_econml_estimator', 'econml_estimator', 'estimator', '_estimator']:
         inner = getattr(estimate.estimator, name, None)
         if inner is not None and inner is not estimate.estimator:
@@ -77,13 +80,11 @@ def refute_comparison(df, level):
         },
     )
 
-    wrapper = type(estimate.estimator).__name__
     inner = find_inner_estimator(estimate)
     inner_name = type(inner).__name__ if inner is not None else 'not found'
     print(f"\n=== ${level} vs $0 ===")
-    print(f"Estimator wrapper: {wrapper}")
+    print(f"Estimator wrapper: {type(estimate.estimator).__name__}")
     print(f"Wrapped EconML class: {inner_name}")
-
     if inner is None or 'DML' not in inner_name:
         raise RuntimeError(f"Expected a DML class inside the wrapper, got: {inner_name}")
 
@@ -93,6 +94,17 @@ def refute_comparison(df, level):
     for method, kwargs in REFUTERS:
         r = model.refute_estimate(estimand, estimate, method_name=method, **kwargs)
         print(f"  {method}: original {r.estimated_effect:.4f}   new {r.new_effect:.4f}")
+
+    for strength in SENSITIVITY_STRENGTHS:
+        sens = model.refute_estimate(
+            estimand, estimate,
+            method_name='add_unobserved_common_cause',
+            confounders_effect_on_treatment='binary_flip',
+            confounders_effect_on_outcome='linear',
+            effect_strength_on_treatment=strength,
+            effect_strength_on_outcome=strength,
+        )
+        print(f"  sensitivity (strength {strength}): original {sens.estimated_effect:.4f}   new {sens.new_effect:.4f}")
 
 
 def main():

@@ -1,36 +1,49 @@
-import numpy as np
 import pandas as pd
-from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin, clone
 from sklearn.model_selection import train_test_split, KFold
 from econml.dml import LinearDML
 
-from outcome_model import fit_outcome_model
-from treatment_model import fit_treatment_model
+from outcome_model import fit_outcome_model, OUTCOME_FEATURES
+from treatment_model import fit_treatment_model, TREATMENT_FEATURES
 
 DATA_PATH = 'data/mock/mock_customers.csv'
-CONFOUNDERS = ['income', 'prior_orders', 'tenure_days', 'season']
 RANDOM_STATE = 42
 
 
-class ProbaRegressor(BaseEstimator, RegressorMixin):
-    """Wraps a fitted classifier so LinearDML can use it as the outcome model.
-    LinearDML expects a regressor interface; this returns P(purchase_made = 1)."""
+def design(df):
+    # One matrix with every column either model needs
+    return pd.get_dummies(df[OUTCOME_FEATURES], columns=['season'],
+                          drop_first=True).astype(float)
 
-    def __init__(self, classifier=None):
-        self.classifier = classifier
+
+class OutcomeWrapper(BaseEstimator, RegressorMixin):
+    def __init__(self, clf=None, cols=None):
+        self.clf = clf
+        self.cols = cols
 
     def fit(self, X, y):
-        self.model_ = clone(self.classifier).fit(X, y)
+        self.model_ = clone(self.clf).fit(X[:, self.cols], y)
         return self
 
     def predict(self, X):
-        return self.model_.predict_proba(X)[:, 1]
+        return self.model_.predict_proba(X[:, self.cols])[:, 1]
 
 
-def design(df):
-    # Same design matrix as the model scripts: season one-hot encoded
-    return pd.get_dummies(df[CONFOUNDERS], columns=['season'],
-                          drop_first=True).astype(float).values
+class TreatmentWrapper(BaseEstimator, ClassifierMixin):
+    def __init__(self, clf=None, cols=None):
+        self.clf = clf
+        self.cols = cols
+
+    def fit(self, X, y):
+        self.model_ = clone(self.clf).fit(X[:, self.cols], y)
+        self.classes_ = self.model_.classes_
+        return self
+
+    def predict(self, X):
+        return self.model_.predict(X[:, self.cols])
+
+    def predict_proba(self, X):
+        return self.model_.predict_proba(X[:, self.cols])
 
 
 def main():
@@ -39,19 +52,24 @@ def main():
         df, test_size=0.2, random_state=RANDOM_STATE,
         stratify=df['discount_amount'])
 
-    # Chosen nuisance models (selected on the training split only)
     outcome_fit, out_summary = fit_outcome_model(df_train, df_test)
     treat_fit, trt_summary = fit_treatment_model(df_train, df_test)
 
-    X_tr, X_te = design(df_train), design(df_test)
+    X_all = design(df)
+    cols = list(X_all.columns)
+    out_cols = [i for i, c in enumerate(cols)
+                if c in OUTCOME_FEATURES or c.startswith('season_')]
+    trt_cols = [i for i, c in enumerate(cols)
+                if c in TREATMENT_FEATURES or c.startswith('season_')]
+
+    X_tr = X_all.loc[df_train.index].values
+    X_te = X_all.loc[df_test.index].values
     Y_tr = df_train['purchase_made'].values
     T_tr = df_train['discount_amount'].values
 
-    # Confounders are both the nuisance inputs and the effect modifiers,
-    # so the estimate is the average effect among the customers who got each level.
     est = LinearDML(
-        model_y=ProbaRegressor(outcome_fit),
-        model_t=clone(treat_fit),
+        model_y=OutcomeWrapper(outcome_fit, out_cols),
+        model_t=TreatmentWrapper(treat_fit, trt_cols),
         discrete_treatment=True,
         cv=KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE),
         random_state=RANDOM_STATE,
@@ -62,7 +80,6 @@ def main():
     for lvl in [10, 20]:
         mask = df_test['discount_amount'].values == lvl
         X_lvl = X_te[mask]
-
         dml = est.effect(X_lvl, T0=0, T1=lvl).mean()
         lb, ub = est.effect_interval(X_lvl, T0=0, T1=lvl, alpha=0.05)
 
@@ -81,13 +98,10 @@ def main():
             'n_treated_test': int(mask.sum()),
         })
 
-    results = pd.DataFrame(rows)
+    print("Outcome features:", OUTCOME_FEATURES)
+    print("Treatment features:", TREATMENT_FEATURES)
     print("Outcome model:", out_summary['chosen'], "| Treatment model:", trt_summary['chosen'])
-    print(results.to_string(index=False))
-
-    # Save the fitted nuisance choices for the record
-    pd.DataFrame([out_summary, trt_summary]).to_csv(
-        'data/processed/nuisance_summary.csv', index=False)
+    print(pd.DataFrame(rows).to_string(index=False))
 
 
 if __name__ == '__main__':
