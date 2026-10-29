@@ -11,6 +11,9 @@ OUT_PATH = 'data/processed/allocation.csv'
 LEVELS = [10, 20]
 COLS = {10: 'ite_10', 20: 'ite_20'}
 
+# Add this near the top with your constants
+AOV = 100  # Assume an Average Order Value of $100 per repeat purchase
+
 
 def solve_milp(scores, budget):
     n = len(scores)
@@ -19,7 +22,8 @@ def solve_milp(scores, budget):
     c = np.zeros(n_vars)
     cost = np.zeros(n_vars)
     for k, level in enumerate(LEVELS):
-        c[k::2] = -scores[COLS[level]].values   # milp minimises, so negate the gain
+        # Multiply the predicted extra repeats by AOV to optimize for Revenue
+        c[k::2] = -(scores[COLS[level]].values * AOV)  
         cost[k::2] = level
 
     # Constraint 1: at most one level per customer (sparse, two entries per row)
@@ -99,10 +103,15 @@ def main():
     rand_spend, rand_gain = baseline_random(scores, args.budget)
 
     print(f"Budget: ${args.budget:,.0f}")
-    print(f"Optimized (SciPy milp): spend ${spend:,.0f}, customers {len(alloc):,}, "
-          f"predicted extra repeats {gain:,.1f}")
-    print(f"First-IDs baseline: spend ${base_spend:,.0f}, predicted extra repeats {base_gain:,.1f}")
-    print(f"Random baseline: spend ${rand_spend:,.0f}, predicted extra repeats {rand_gain:,.1f}")
+    print(f"Optimized (SciPy milp): spend ${spend:,.0f}, customers {len(alloc):,}")
+    print(f"  -> Predicted Revenue: ${gain * AOV:,.2f} (ROI: {((gain * AOV) - spend) / spend * 100:.1f}%)")
+    
+    print(f"First-IDs baseline: spend ${base_spend:,.0f}")
+    print(f"  -> Predicted Revenue: ${base_gain * AOV:,.2f} (ROI: {((base_gain * AOV) - base_spend) / base_spend * 100:.1f}%)")
+    
+    print(f"Random baseline: spend ${rand_spend:,.0f}")
+    print(f"  -> Predicted Revenue: ${rand_gain * AOV:,.2f} (ROI: {((rand_gain * AOV) - rand_spend) / rand_spend * 100:.1f}%)")
+    
     print(f"Saved {OUT_PATH}")
 
 

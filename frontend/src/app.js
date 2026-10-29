@@ -3,6 +3,9 @@ import createPlotlyComponent from 'react-plotly.js/factory';
 import Plotly from 'plotly.js-dist-min';
 import './app.css';
 
+// Import the new Prescription Table component
+import PrescriptionTable from './PrescriptionTable';
+
 const Plot = createPlotlyComponent(Plotly);
 
 const causalModel = {
@@ -344,6 +347,12 @@ function App() {
             </>
           )}
         </div>
+
+        {/* The new Prescription Table rendered underneath everything else */}
+        <div className="card prescription-card" style={{ marginTop: '2rem' }}>
+          <PrescriptionTable />
+        </div>
+
       </main>
     </div>
   );

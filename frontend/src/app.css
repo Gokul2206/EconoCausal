@@ -296,3 +296,169 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+/* --- Prescription Table Styles --- */
+.prescription-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.prescription-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.prescription-header h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  color: #2c3e50;
+}
+
+.file-upload-box {
+  background: #f8f9fa;
+  border: 1px dashed #ced4da;
+  padding: 0.75rem 1.25rem;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.file-upload-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #1976d2;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0;
+}
+
+.file-upload-label:hover {
+  color: #115293;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.kpi-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.kpi-title {
+  font-size: 0.85rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 0.5rem 0;
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #212529;
+  margin: 0;
+}
+
+.kpi-value.green {
+  color: #2e7d32;
+}
+
+.table-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table-toolbar {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fdfdfd;
+}
+
+.search-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999;
+}
+
+.search-input {
+  padding: 0.5rem 1rem 0.5rem 2.2rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  width: 280px;
+  font-size: 0.9rem;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+.table-responsive {
+  overflow-x: auto;
+}
+
+.styled-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.styled-table th, .styled-table td {
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.styled-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+}
+
+.styled-table tr:hover {
+  background-color: #f1f3f5;
+}
+
+.badge-green {
+  background-color: #e6f4ea;
+  color: #1e8e3e;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.text-center {
+  text-align: center;
+  color: #6c757d;
+  padding: 2rem !important;
+}
+
+.table-footer {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #6c757d;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+}
