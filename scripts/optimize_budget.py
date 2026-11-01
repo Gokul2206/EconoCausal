@@ -5,6 +5,7 @@ import pandas as pd
 from scipy.optimize import milp, LinearConstraint, Bounds
 from scipy.sparse import lil_matrix
 from scipy.sparse import csr_matrix, vstack
+import json
 
 SCORES_PATH = 'data/processed/ite_scores_crossfit.csv'
 OUT_PATH = 'data/processed/allocation.csv'
@@ -101,19 +102,36 @@ def main():
 
     base_spend, base_gain = baseline_first_ids(scores, args.budget)
     rand_spend, rand_gain = baseline_random(scores, args.budget)
+    
+    # --- NEW UPGRADE: Exporting Business KPIs for the Frontend ---
+    metrics = {
+        "budget": args.budget,
+        "scipy_optimized": {
+            "spend": float(spend),
+            "revenue": float(gain * AOV),
+            "roi_percent": float(((gain * AOV) - spend) / spend * 100) if spend > 0 else 0
+        },
+        "random_baseline": {
+            "spend": float(rand_spend),
+            "revenue": float(rand_gain * AOV),
+            "roi_percent": float(((rand_gain * AOV) - rand_spend) / rand_spend * 100) if rand_spend > 0 else 0
+        }
+    }
+    
+    metrics["scipy_optimized"]["revenue_lift_vs_random"] = metrics["scipy_optimized"]["revenue"] - metrics["random_baseline"]["revenue"]
+    
+    with open('data/processed/optimization_metrics.json', 'w') as f:
+        json.dump(metrics, f, indent=4)
+    # -----------------------------------------------------------
 
     print(f"Budget: ${args.budget:,.0f}")
     print(f"Optimized (SciPy milp): spend ${spend:,.0f}, customers {len(alloc):,}")
-    print(f"  -> Predicted Revenue: ${gain * AOV:,.2f} (ROI: {((gain * AOV) - spend) / spend * 100:.1f}%)")
-    
-    print(f"First-IDs baseline: spend ${base_spend:,.0f}")
-    print(f"  -> Predicted Revenue: ${base_gain * AOV:,.2f} (ROI: {((base_gain * AOV) - base_spend) / base_spend * 100:.1f}%)")
-    
+    print(f"  -> Predicted Revenue: ${gain * AOV:,.2f} (ROI: {metrics['scipy_optimized']['roi_percent']:.1f}%)")
     print(f"Random baseline: spend ${rand_spend:,.0f}")
-    print(f"  -> Predicted Revenue: ${rand_gain * AOV:,.2f} (ROI: {((rand_gain * AOV) - rand_spend) / rand_spend * 100:.1f}%)")
+    print(f"  -> Predicted Revenue: ${rand_gain * AOV:,.2f} (ROI: {metrics['random_baseline']['roi_percent']:.1f}%)")
     
     print(f"Saved {OUT_PATH}")
-
+    print(f"Saved data/processed/optimization_metrics.json (Ready for React UI)")
 
 if __name__ == '__main__':
     main()

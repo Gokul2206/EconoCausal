@@ -38,16 +38,26 @@ def main():
     ite_10 = np.zeros(len(df))
     ite_20 = np.zeros(len(df))
 
+    # Inside crossfit_ite.py
     kf = KFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     for fold, (tr, te) in enumerate(kf.split(X), start=1):
+        
+        # We ensure the cloned baseline models also use all cores
+        out_model = clone(outcome_fit)
+        if hasattr(out_model, 'n_jobs'): out_model.n_jobs = -1
+            
+        trt_model = clone(treat_fit)
+        if hasattr(trt_model, 'n_jobs'): trt_model.n_jobs = -1
+
         forest = CausalForestDML(
-            model_y=OutcomeWrapper(clone(outcome_fit), out_cols),
-            model_t=TreatmentWrapper(clone(treat_fit), trt_cols),
+            model_y=OutcomeWrapper(out_model, out_cols),
+            model_t=TreatmentWrapper(trt_model, trt_cols),
             discrete_treatment=True,
             cv=5,
             n_estimators=500,
             min_samples_leaf=50,
             random_state=RANDOM_STATE,
+            n_jobs=-1,  # <--- THE UPGRADE: Multi-threading enabled
         )
         forest.fit(Y[tr], T[tr], X=X[tr])
         ite_10[te] = forest.effect(X[te], T0=0, T1=10)
