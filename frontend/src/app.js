@@ -93,6 +93,10 @@ function App() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // NEW: State for Drift Detection API
+  const [driftReport, setDriftReport] = useState(null);
+  const [driftError, setDriftError] = useState('');
+
   const [scoreRows, setScoreRows] = useState(null);
   const [scoresError, setScoresError] = useState('');
   const [level, setLevel] = useState('ite_20');
@@ -100,22 +104,52 @@ function App() {
 
   const lvlAmount = level === 'ite_10' ? 10 : 20;
 
-  const handleUpload = (e) => {
+  // UPDATED: handleUpload now talks to FastAPI to check for data drift
+  const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) return;
+    
     setLoading(true);
+    setDriftError('');
+    setDriftReport(null);
+
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const { headers, rows } = parseCsv(event.target.result);
       const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
+      
       if (missing.length > 0) {
         setData(null);
         setError(`Missing required columns: ${missing.join(', ')}`);
-      } else {
-        setError('');
-        setData({ filename: file.name, rows: rows.length, columns: headers.length });
+        setLoading(false);
+        return;
+      } 
+      
+      setError('');
+      setData({ filename: file.name, rows: rows.length, columns: headers.length });
+
+      // Send the file to the FastAPI Drift Detector
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const response = await fetch("http://localhost:8000/api/detect_drift", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to reach the Drift API. Is FastAPI running?");
+        }
+
+        const driftData = await response.json();
+        setDriftReport(driftData);
+        
+      } catch (err) {
+        setDriftError(err.message);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     reader.readAsText(file);
   };
@@ -201,11 +235,43 @@ function App() {
                   onChange={(e) => setFile(e.target.files[0])} required />
               </div>
               <button type="submit" disabled={!file || loading}>
-                {loading ? 'Processing...' : 'Upload CSV'}
+                {loading ? 'Processing API Call...' : 'Upload CSV'}
               </button>
             </form>
             <p className="hint">Select mock_customers.csv from data/mock/</p>
             {error && <p style={{ color: '#c62828', marginTop: '10px' }}>{error}</p>}
+            
+            {/* NEW: Drift Error Display */}
+            {driftError && <p style={{ color: '#c62828', marginTop: '10px' }}>{driftError}</p>}
+            
+            {/* NEW: Data Drift UI Box */}
+            {driftReport && (
+              <div style={{
+                marginTop: '15px',
+                padding: '10px',
+                borderRadius: '5px',
+                backgroundColor: driftReport.overall_drift_detected ? '#ffebee' : '#e8f5e9',
+                border: `1px solid ${driftReport.overall_drift_detected ? '#ef5350' : '#66bb6a'}`
+              }}>
+                <h4 style={{ color: driftReport.overall_drift_detected ? '#c62828' : '#2e7d32', marginBottom: '5px' }}>
+                  {driftReport.overall_drift_detected ? '⚠️ Model Warning' : '✅ Data Validated'}
+                </h4>
+                <p style={{ fontSize: '0.9rem', marginBottom: '10px' }}>
+                  {driftReport.warning_message}
+                </p>
+                {driftReport.overall_drift_detected && (
+                  <ul style={{ fontSize: '0.85rem', color: '#555', paddingLeft: '20px' }}>
+                    {Object.entries(driftReport.feature_breakdown).map(([feature, data]) => (
+                      data.drift_detected && (
+                        <li key={feature}>
+                          <strong>{feature}</strong> has shifted significantly (p={data.p_value})
+                        </li>
+                      )
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="card">

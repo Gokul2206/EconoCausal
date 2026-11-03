@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, RegressorMixin, ClassifierMixin, clone
 from sklearn.model_selection import train_test_split, KFold
 from econml.dml import LinearDML
+import os
 
 from outcome_model import fit_outcome_model, OUTCOME_FEATURES
 from treatment_model import fit_treatment_model, TREATMENT_FEATURES
@@ -102,7 +103,9 @@ def main():
     print("Treatment features:", TREATMENT_FEATURES)
     print("Outcome model:", out_summary['chosen'], "| Treatment model:", trt_summary['chosen'])
     print(pd.DataFrame(rows).to_string(index=False))
-
+    os.makedirs('data/processed', exist_ok=True)
+    results = pd.DataFrame(rows)
+    results.to_csv('data/processed/headline_estimates.csv', index=False)
 
 if __name__ == '__main__':
     main()
