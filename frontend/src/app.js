@@ -2,8 +2,6 @@ import React, { useState, useMemo } from 'react';
 import createPlotlyComponent from 'react-plotly.js/factory';
 import Plotly from 'plotly.js-dist-min';
 import './app.css';
-
-// Import the new Prescription Table component
 import PrescriptionTable from './PrescriptionTable';
 
 const Plot = createPlotlyComponent(Plotly);
@@ -14,11 +12,7 @@ const causalModel = {
   confounders: ['income', 'prior_orders', 'tenure_days', 'season', 'engagement_proxy'],
 };
 
-const REQUIRED_COLUMNS = [
-  'customer_id', 'discount_amount', 'purchase_made',
-  'income', 'prior_orders', 'tenure_days', 'season',
-];
-
+const REQUIRED_COLUMNS = ['customer_id', 'discount_amount', 'purchase_made', 'income', 'prior_orders', 'tenure_days', 'season'];
 const SCORE_COLUMNS = ['customer_id', 'ite_10', 'ite_20', 'ite_diff', 'discount_amount', 'purchase_made'];
 const N_BINS = 20;
 
@@ -34,7 +28,6 @@ function parseCsv(text) {
   return { headers, rows };
 }
 
-// Targeting curve: $0 customers vs customers who got `level`, ranked by score.
 function targetingCurve(rows, scoreKey, level) {
   const sub = rows
     .filter((r) => r.discount_amount === 0 || r.discount_amount === level)
@@ -62,7 +55,6 @@ function targetingCurve(rows, scoreKey, level) {
   return { x, values, random };
 }
 
-// Observed repeat-rate gain within each decile of predicted effect (unadjusted)
 function upliftByDecile(rows, scoreKey, level) {
   const sub = rows
     .filter((r) => r.discount_amount === 0 || r.discount_amount === level)
@@ -93,7 +85,6 @@ function App() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // NEW: State for Drift Detection API
   const [driftReport, setDriftReport] = useState(null);
   const [driftError, setDriftError] = useState('');
 
@@ -104,11 +95,9 @@ function App() {
 
   const lvlAmount = level === 'ite_10' ? 10 : 20;
 
-  // UPDATED: handleUpload now talks to FastAPI to check for data drift
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!file) return;
-    
     setLoading(true);
     setDriftError('');
     setDriftReport(null);
@@ -117,18 +106,15 @@ function App() {
     reader.onload = async (event) => {
       const { headers, rows } = parseCsv(event.target.result);
       const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
-      
       if (missing.length > 0) {
         setData(null);
-        setError(`Missing required columns: ${missing.join(', ')}`);
+        setError(`Missing columns: ${missing.join(', ')}`);
         setLoading(false);
         return;
       } 
-      
       setError('');
       setData({ filename: file.name, rows: rows.length, columns: headers.length });
 
-      // Send the file to the FastAPI Drift Detector
       const formData = new FormData();
       formData.append("file", file);
 
@@ -137,14 +123,9 @@ function App() {
           method: "POST",
           body: formData,
         });
-
-        if (!response.ok) {
-          throw new Error("Failed to reach the Drift API. Is FastAPI running?");
-        }
-
+        if (!response.ok) throw new Error("API Offline");
         const driftData = await response.json();
         setDriftReport(driftData);
-        
       } catch (err) {
         setDriftError(err.message);
       } finally {
@@ -163,7 +144,7 @@ function App() {
       const missing = SCORE_COLUMNS.filter((c) => !headers.includes(c));
       if (missing.length > 0) {
         setScoreRows(null);
-        setScoresError(`Scores file missing: ${missing.join(', ')}`);
+        setScoresError(`Missing: ${missing.join(', ')}`);
         return;
       }
       setScoresError('');
@@ -192,6 +173,16 @@ function App() {
     };
   }, [filtered, level]);
 
+  const roiText = useMemo(() => {
+    if (!scoreRows || filtered.length === 0) return null;
+    const aiSales = filtered.reduce((sum, r) => sum + r[level], 0);
+    const totalMeanEffect = scoreRows.reduce((sum, r) => sum + r[level], 0) / scoreRows.length;
+    const randomSales = filtered.length * totalMeanEffect;
+    const moneySaved = (aiSales - randomSales) * 50; 
+    if (moneySaved <= 0) return "Adjust sliders to find a profitable strategy.";
+    return `💰 Strategy saves $${Math.round(moneySaved).toLocaleString('en-US')}`;
+  }, [scoreRows, filtered, level]);
+
   const histogram = useMemo(() => {
     if (!scoreRows) return [];
     const values = scoreRows.map((r) => r[level]);
@@ -219,206 +210,139 @@ function App() {
   }, [scoreRows, level, lvlAmount]);
 
   return (
-    <div className="App">
-      <header className="header">
-        <h1>🎯 EconoCausal</h1>
-        <p>Dynamic Pricing via Double Machine Learning</p>
-      </header>
+    <div className="app-wrapper">
+      
+      {/* LEFT SIDEBAR (Fixed Toolbar) */}
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <h1>🎯 EconoCausal</h1>
+          <p>Causal AI Engine</p>
+        </div>
 
-      <main className="main">
-        <div className="container">
-          <div className="card">
-            <h2>📊 Upload Campaign Data</h2>
-            <form onSubmit={handleUpload}>
-              <div className="form-group">
-                <input type="file" accept=".csv"
-                  onChange={(e) => setFile(e.target.files[0])} required />
-              </div>
-              <button type="submit" disabled={!file || loading}>
-                {loading ? 'Processing API Call...' : 'Upload CSV'}
-              </button>
-            </form>
-            <p className="hint">Select mock_customers.csv from data/mock/</p>
-            {error && <p style={{ color: '#c62828', marginTop: '10px' }}>{error}</p>}
-            
-            {/* NEW: Drift Error Display */}
-            {driftError && <p style={{ color: '#c62828', marginTop: '10px' }}>{driftError}</p>}
-            
-            {/* NEW: Data Drift UI Box */}
-            {driftReport && (
-              <div style={{
-                marginTop: '15px',
-                padding: '10px',
-                borderRadius: '5px',
-                backgroundColor: driftReport.overall_drift_detected ? '#ffebee' : '#e8f5e9',
-                border: `1px solid ${driftReport.overall_drift_detected ? '#ef5350' : '#66bb6a'}`
-              }}>
-                <h4 style={{ color: driftReport.overall_drift_detected ? '#c62828' : '#2e7d32', marginBottom: '5px' }}>
-                  {driftReport.overall_drift_detected ? '⚠️ Model Warning' : '✅ Data Validated'}
-                </h4>
-                <p style={{ fontSize: '0.9rem', marginBottom: '10px' }}>
-                  {driftReport.warning_message}
-                </p>
-                {driftReport.overall_drift_detected && (
-                  <ul style={{ fontSize: '0.85rem', color: '#555', paddingLeft: '20px' }}>
-                    {Object.entries(driftReport.feature_breakdown).map(([feature, data]) => (
-                      data.drift_detected && (
-                        <li key={feature}>
-                          <strong>{feature}</strong> has shifted significantly (p={data.p_value})
-                        </li>
-                      )
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="card">
-            <h2>💰 Budget Constraint</h2>
-            <div className="form-group">
-              <label>Marketing Budget ($):</label>
-              <input type="number" value={budget}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  setBudget(value);
-                  setBudgetError(value <= 0 ? 'Budget must be greater than 0' : '');
-                }}
-                min="1000" step="1000" />
+        <div className="sidebar-section">
+          <h3>1. System Data</h3>
+          <form onSubmit={handleUpload}>
+            <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} required />
+            <button type="submit" disabled={!file || loading}>
+              {loading ? 'Scanning API...' : 'Upload Validation Data'}
+            </button>
+          </form>
+          {error && <div className="error-box">{error}</div>}
+          {driftError && <div className="error-box">{driftError}</div>}
+          
+          {driftReport && (
+            <div className={`status-box ${driftReport.overall_drift_detected ? 'drift-warn' : 'drift-safe'}`}>
+              <strong>{driftReport.overall_drift_detected ? '⚠️ Drift Detected' : '✅ Data Validated'}</strong>
+              <p>{driftReport.warning_message}</p>
             </div>
-            {budgetError && <p style={{ color: '#c62828', marginTop: '10px' }}>{budgetError}</p>}
-            <div className="budget-display">${budget.toLocaleString('en-US')}</div>
-          </div>
-        </div>
-
-        <div className="dag-panel">
-          <h2>📐 Causal Graph (DAG)</h2>
-          <div className="dag-node dag-treatment">
-            <span className="dag-label">Treatment</span>
-            <code>{causalModel.treatment}</code>
-          </div>
-          <div className="dag-node dag-outcome">
-            <span className="dag-label">Outcome</span>
-            <code>{causalModel.outcome}</code>
-          </div>
-          <div className="dag-node dag-confounders">
-            <span className="dag-label">Confounders</span>
-            {causalModel.confounders.map((c) => <code key={c}>{c}</code>)}
-          </div>
-          <p className="dag-note">Reasons are in docs/causal_assumptions.md.</p>
-        </div>
-
-        {data && (
-          <div className="status">
-            <h3>✓ Configuration Ready</h3>
-            <p><strong>File:</strong> {data.filename}</p>
-            <p><strong>Customers:</strong> {data.rows.toLocaleString('en-US')}</p>
-            <p><strong>Budget:</strong> ${budget.toLocaleString('en-US')}</p>
-          </div>
-        )}
-
-        <div className="card scores-card">
-          <h2>📈 Individual Treatment Effects</h2>
-          <p className="hint">Load data/processed/ite_scores_crossfit.csv</p>
-          <input type="file" accept=".csv" onChange={handleScores} />
-          {scoresError && <p style={{ color: '#c62828', marginTop: '10px' }}>{scoresError}</p>}
-
-          {scoreRows && (
-            <>
-              <div className="filters">
-                <label>
-                  Discount level:&nbsp;
-                  <select value={level} onChange={(e) => setLevel(e.target.value)}>
-                    <option value="ite_10">$10 vs $0</option>
-                    <option value="ite_20">$20 vs $0</option>
-                  </select>
-                </label>
-                <label>
-                  Minimum effect: {minEffect.toFixed(2)}&nbsp;
-                  <input type="range" min="-0.1" max="0.2" step="0.01"
-                    value={minEffect} onChange={(e) => setMinEffect(Number(e.target.value))} />
-                </label>
-              </div>
-
-              {summary && (
-                <p className="summary-line">
-                  <strong>Customers matching:</strong> {summary.count.toLocaleString('en-US')} &nbsp;·&nbsp;
-                  <strong>Mean effect:</strong> {summary.meanEffect.toFixed(4)} &nbsp;·&nbsp;
-                  <strong>Repeat rate:</strong> {(summary.meanOutcome * 100).toFixed(1)}%
-                </p>
-              )}
-
-              <div className="scores-row">
-                <div>
-                  <div className="histogram">
-                    {histogram.map((b, i) => (
-                      <div key={i} className="bar"
-                        title={`${b.start.toFixed(3)}: ${b.count}`}
-                        style={{ height: `${(b.count / maxCount) * 140}px` }} />
-                    ))}
-                  </div>
-                  <p className="hint">Distribution of estimated effects.</p>
-                </div>
-
-                {curve && (
-                  <div className="plot-wrap">
-                    <Plot
-                      data={[
-                        { x: curve.x, y: curve.values, type: 'scatter', mode: 'lines+markers',
-                          name: `Ranked by ${level === 'ite_10' ? '$10' : '$20'} effect` },
-                        { x: curve.x, y: curve.random, type: 'scatter', mode: 'lines',
-                          line: { dash: 'dash' }, name: 'Random rollout' },
-                      ]}
-                      layout={{
-                        title: { text: 'Targeting curve (out-of-fold, unadjusted)', font: { size: 15 } },
-                        xaxis: { title: 'Percent targeted (ranked)' },
-                        yaxis: { title: 'Cumulative incremental repeats' },
-                        template: 'plotly_white',
-                        margin: { l: 60, r: 20, t: 50, b: 50 },
-                        legend: { orientation: 'h', y: -0.25 },
-                        autosize: true,
-                        height: 340,
-                      }}
-                      useResizeHandler
-                      style={{ width: '100%' }}
-                      config={{ displayModeBar: false, responsive: true }}
-                    />
-                  </div>
-                )}
-
-                {deciles && (
-                  <div className="plot-wrap">
-                    <Plot
-                      data={[
-                        { x: deciles.map((d) => d.label), y: deciles.map((d) => d.uplift),
-                          type: 'bar', name: 'Observed uplift',
-                          marker: { color: deciles.map((d) => (d.uplift >= 0 ? '#1f77b4' : '#d62728')) } },
-                      ]}
-                      layout={{
-                        title: { text: 'Uplift by decile, (unadjusted)', font: { size: 15 } },
-                        xaxis: { title: 'Decile (D1 = highest predicted effect)' },
-                        yaxis: { title: 'Repeat-rate gain (percentage points)' },
-                        template: 'plotly_white',
-                        margin: { l: 60, r: 20, t: 50, b: 50 },
-                        height: 340,
-                        autosize: true,
-                      }}
-                      useResizeHandler
-                      style={{ width: '100%' }}
-                      config={{ displayModeBar: false, responsive: true }}
-                    />
-                  </div>
-                )}
-              </div>
-            </>
           )}
         </div>
 
-        {/* The new Prescription Table rendered underneath everything else */}
-        <div className="card prescription-card" style={{ marginTop: '2rem' }}>
-          <PrescriptionTable />
+        <div className="sidebar-section">
+          <h3>2. Budget & ITE Scores</h3>
+          <label>Campaign Budget ($)</label>
+          <input type="number" value={budget}
+            onChange={(e) => setBudget(Number(e.target.value))}
+            min="1000" step="1000" />
+          
+          <label style={{marginTop: '15px'}}>Load Scores (ite_scores.csv)</label>
+          <input type="file" accept=".csv" onChange={handleScores} />
+          {scoresError && <div className="error-box">{scoresError}</div>}
         </div>
 
+        {scoreRows && (
+          <div className="sidebar-section highlight-section">
+            <h3>3. Strategy Controls</h3>
+            <label>Discount Tier</label>
+            <select value={level} onChange={(e) => setLevel(e.target.value)}>
+              <option value="ite_10">$10 Promotion</option>
+              <option value="ite_20">$20 Promotion</option>
+            </select>
+            
+            <label style={{marginTop: '15px'}}>Targeting Threshold: {minEffect.toFixed(2)}</label>
+            <input type="range" min="-0.1" max="0.2" step="0.01"
+              value={minEffect} onChange={(e) => setMinEffect(Number(e.target.value))} />
+          </div>
+        )}
+
+        <div className="sidebar-section dag-mini">
+          <h3>Causal Graph Info</h3>
+          <code>Treatment: {causalModel.treatment}</code>
+          <code>Outcome: {causalModel.outcome}</code>
+          <p>Confounders: {causalModel.confounders.join(', ')}</p>
+        </div>
+      </aside>
+
+      {/* RIGHT MAIN CONTENT (Scrolls independently) */}
+      <main className="main-content">
+        {!scoreRows ? (
+          <div className="empty-state">
+            <h2>Welcome to EconoCausal</h2>
+            <p>Please upload your campaign data and ITE scores in the sidebar to begin analysis.</p>
+          </div>
+        ) : (
+          <>
+            {/* Top Stats Bar */}
+            <div className="top-stats-bar">
+              <div className="stat-card">
+                <h4>Audience Size</h4>
+                <div className="value">{summary?.count.toLocaleString('en-US') || 0}</div>
+              </div>
+              <div className="stat-card">
+                <h4>Mean Effect</h4>
+                <div className="value">{summary ? summary.meanEffect.toFixed(4) : '0.00'}</div>
+              </div>
+              <div className="stat-card highlight-stat">
+                <h4>ROI Summary</h4>
+                <div className="value text-green">{roiText}</div>
+              </div>
+            </div>
+
+            {/* Dashboard Grid */}
+            <div className="dashboard-grid">
+              
+              {/* Histogram Full Width */}
+              <div className="chart-panel full-width">
+                <h3 className="panel-title">ITE Distribution</h3>
+                <div className="histogram">
+                  {histogram.map((b, i) => (
+                    <div key={i} className="bar"
+                      title={`${b.start.toFixed(3)}: ${b.count}`}
+                      style={{ height: `${(b.count / maxCount) * 100}%` }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Side by Side Plots */}
+              <div className="chart-panel">
+                <Plot
+                  data={[
+                    { x: curve?.x, y: curve?.values, type: 'scatter', mode: 'lines+markers', name: 'AI Strategy', marker: {color: '#4f46e5'} },
+                    { x: curve?.x, y: curve?.random, type: 'scatter', mode: 'lines', line: { dash: 'dash', color: '#94a3b8' }, name: 'Random' },
+                  ]}
+                  layout={{ title: 'Targeting Curve', margin: { l: 40, r: 20, t: 40, b: 40 }, autosize: true, height: 300 }}
+                  useResizeHandler style={{ width: '100%' }} config={{ displayModeBar: false }}
+                />
+              </div>
+
+              <div className="chart-panel">
+                <Plot
+                  data={[
+                    { x: deciles?.map(d=>d.label), y: deciles?.map(d=>d.uplift), type: 'bar', marker: { color: deciles?.map(d => d.uplift >= 0 ? '#10b981' : '#ef4444') } },
+                  ]}
+                  layout={{ title: 'Uplift by Decile', margin: { l: 40, r: 20, t: 40, b: 40 }, autosize: true, height: 300 }}
+                  useResizeHandler style={{ width: '100%' }} config={{ displayModeBar: false }}
+                />
+              </div>
+
+            </div>
+
+            {/* Prescription Table */}
+            <div className="table-panel">
+              <PrescriptionTable />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
