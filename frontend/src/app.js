@@ -84,11 +84,13 @@ function App() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   const [driftReport, setDriftReport] = useState(null);
   const [driftError, setDriftError] = useState('');
 
   const [scoreRows, setScoreRows] = useState(null);
+  const [scoresFile, setScoresFile] = useState(null);
   const [scoresError, setScoresError] = useState('');
   const [level, setLevel] = useState('ite_20');
   const [minEffect, setMinEffect] = useState(0);
@@ -119,10 +121,7 @@ function App() {
       formData.append("file", file);
 
       try {
-        const response = await fetch("http://localhost:8000/api/detect_drift", {
-          method: "POST",
-          body: formData,
-        });
+        const response = await fetch("http://localhost:8000/api/detect_drift", { method: "POST", body: formData });
         if (!response.ok) throw new Error("API Offline");
         const driftData = await response.json();
         setDriftReport(driftData);
@@ -135,27 +134,33 @@ function App() {
     reader.readAsText(file);
   };
 
-  const handleScores = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const { headers, rows } = parseCsv(event.target.result);
-      const missing = SCORE_COLUMNS.filter((c) => !headers.includes(c));
-      if (missing.length > 0) {
-        setScoreRows(null);
-        setScoresError(`Missing: ${missing.join(', ')}`);
-        return;
+  const handleScores = async () => {
+    setLoading(true);
+    setScoresError('');
+    
+    try {
+      // Ask Python for the data instead of uploading a file!
+      const response = await fetch("http://localhost:8000/api/scores");
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch scores from Python API.");
       }
-      setScoresError('');
-      setScoreRows(rows.map((r) => ({
+      
+      const data = await response.json();
+      
+      // Load the data into the dashboard
+      setScoreRows(data.map((r) => ({
         ite_10: parseFloat(r.ite_10),
         ite_20: parseFloat(r.ite_20),
         discount_amount: Number(r.discount_amount),
         purchase_made: Number(r.purchase_made),
       })));
-    };
-    reader.readAsText(f);
+      
+    } catch (err) {
+      setScoresError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -180,7 +185,7 @@ function App() {
     const randomSales = filtered.length * totalMeanEffect;
     const moneySaved = (aiSales - randomSales) * 50; 
     if (moneySaved <= 0) return "Adjust sliders to find a profitable strategy.";
-    return `💰 Strategy saves $${Math.round(moneySaved).toLocaleString('en-US')}`;
+    return `+$${Math.round(moneySaved).toLocaleString('en-US')}`;
   }, [scoreRows, filtered, level]);
 
   const histogram = useMemo(() => {
@@ -211,137 +216,156 @@ function App() {
 
   return (
     <div className="app-wrapper">
-      
-      {/* LEFT SIDEBAR (Fixed Toolbar) */}
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1>🎯 EconoCausal</h1>
-          <p>Causal AI Engine</p>
+      {/* INTERACTIVE TOP MENU BAR */}
+      <nav className="top-navbar">
+        <div className="brand">
+          <span className="logo-icon">💠</span> EconoCausal
         </div>
-
-        <div className="sidebar-section">
-          <h3>1. System Data</h3>
-          <form onSubmit={handleUpload}>
-            <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} required />
-            <button type="submit" disabled={!file || loading}>
-              {loading ? 'Scanning API...' : 'Upload Validation Data'}
-            </button>
-          </form>
-          {error && <div className="error-box">{error}</div>}
-          {driftError && <div className="error-box">{driftError}</div>}
-          
-          {driftReport && (
-            <div className={`status-box ${driftReport.overall_drift_detected ? 'drift-warn' : 'drift-safe'}`}>
-              <strong>{driftReport.overall_drift_detected ? '⚠️ Drift Detected' : '✅ Data Validated'}</strong>
-              <p>{driftReport.warning_message}</p>
-            </div>
-          )}
+        <div className="nav-menu">
+          <button className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>Overview</button>
+          <button className={activeTab === 'model' ? 'active' : ''} onClick={() => setActiveTab('model')}>Causal Model</button>
+          <button className={activeTab === 'settings' ? 'active' : ''} onClick={() => setActiveTab('settings')}>Settings</button>
         </div>
-
-        <div className="sidebar-section">
-          <h3>2. Budget & ITE Scores</h3>
-          <label>Campaign Budget ($)</label>
-          <input type="number" value={budget}
-            onChange={(e) => setBudget(Number(e.target.value))}
-            min="1000" step="1000" />
-          
-          <label style={{marginTop: '15px'}}>Load Scores (ite_scores.csv)</label>
-          <input type="file" accept=".csv" onChange={handleScores} />
-          {scoresError && <div className="error-box">{scoresError}</div>}
+        <div className="user-profile">
+          <div className="avatar">AI</div>
         </div>
+      </nav>
 
-        {scoreRows && (
-          <div className="sidebar-section highlight-section">
-            <h3>3. Strategy Controls</h3>
-            <label>Discount Tier</label>
-            <select value={level} onChange={(e) => setLevel(e.target.value)}>
-              <option value="ite_10">$10 Promotion</option>
-              <option value="ite_20">$20 Promotion</option>
-            </select>
-            
-            <label style={{marginTop: '15px'}}>Targeting Threshold: {minEffect.toFixed(2)}</label>
-            <input type="range" min="-0.1" max="0.2" step="0.01"
-              value={minEffect} onChange={(e) => setMinEffect(Number(e.target.value))} />
-          </div>
-        )}
-
-        <div className="sidebar-section dag-mini">
-          <h3>Causal Graph Info</h3>
-          <code>Treatment: {causalModel.treatment}</code>
-          <code>Outcome: {causalModel.outcome}</code>
-          <p>Confounders: {causalModel.confounders.join(', ')}</p>
-        </div>
-      </aside>
-
-      {/* RIGHT MAIN CONTENT (Scrolls independently) */}
       <main className="main-content">
+        
+        {/* INTERACTIVE CONTROL STRIP */}
+        <section className="control-strip">
+          
+          <div className="control-card">
+            <h3>1. Data Drift Validation</h3>
+            <p className="subtitle">Connect campaign data to API</p>
+            <form onSubmit={handleUpload} className="upload-form">
+              <label className="custom-file-upload">
+                <input type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} required />
+                {file ? file.name : 'Choose CSV File'}
+              </label>
+              <button type="submit" disabled={!file || loading} className="primary-btn">
+                {loading ? 'Scanning API...' : 'Validate'}
+              </button>
+            </form>
+            {driftReport && (
+              <div className={`status-badge ${driftReport.overall_drift_detected ? 'warn' : 'success'}`}>
+                {driftReport.overall_drift_detected ? '⚠️ Model Drift Detected' : '✅ Data Safe'}
+              </div>
+            )}
+            {driftError && <div className="error-text">{driftError}</div>}
+          </div>
+
+          <div className="control-card">
+            <h3>2. Load Intelligence</h3>
+            <p className="subtitle">Upload ITE Predictions</p>
+            <button 
+              onClick={handleScores} 
+              className="primary-btn" 
+              style={{ width: '100%', marginTop: '15px' }}
+              disabled={loading}
+            >
+              {loading ? 'Fetching from API...' : 'Load Causal Intelligence'}
+            </button>
+            {scoresError && <div className="error-text">{scoresError}</div>}
+          </div>
+
+          <div className="control-card">
+            <h3>3. Strategic Tuning</h3>
+            <p className="subtitle">Set boundaries</p>
+            <div className="tuning-controls">
+              <div className="input-group">
+                <label>Budget ($)</label>
+                <input type="number" value={budget} onChange={(e) => setBudget(Number(e.target.value))} min="1000" step="1000" />
+              </div>
+              <div className="input-group">
+                <label>Promotion Tier</label>
+                <select value={level} onChange={(e) => setLevel(e.target.value)}>
+                  <option value="ite_10">$10 Off</option>
+                  <option value="ite_20">$20 Off</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        {/* ANALYTICS BOARD */}
         {!scoreRows ? (
           <div className="empty-state">
-            <h2>Welcome to EconoCausal</h2>
-            <p>Please upload your campaign data and ITE scores in the sidebar to begin analysis.</p>
+            <div className="empty-icon">📊</div>
+            <h2>Awaiting Data</h2>
+            <p>Upload your campaign data and ITE scores in the control strip above to begin.</p>
           </div>
         ) : (
-          <>
-            {/* Top Stats Bar */}
-            <div className="top-stats-bar">
-              <div className="stat-card">
-                <h4>Audience Size</h4>
-                <div className="value">{summary?.count.toLocaleString('en-US') || 0}</div>
+          <div className="analytics-board">
+            
+            {/* KPI ROW */}
+            <div className="kpi-row">
+              <div className="kpi-card">
+                <h4>Eligible Audience</h4>
+                <div className="kpi-value">{summary?.count.toLocaleString('en-US') || 0}</div>
               </div>
-              <div className="stat-card">
-                <h4>Mean Effect</h4>
-                <div className="value">{summary ? summary.meanEffect.toFixed(4) : '0.00'}</div>
+              <div className="kpi-card">
+                <h4>Mean Causal Lift</h4>
+                <div className="kpi-value">{(summary ? summary.meanEffect * 100 : 0).toFixed(2)}%</div>
               </div>
-              <div className="stat-card highlight-stat">
-                <h4>ROI Summary</h4>
-                <div className="value text-green">{roiText}</div>
+              <div className="kpi-card highlight-kpi">
+                <h4>Value Generated vs Random</h4>
+                <div className="kpi-value profit-text">{roiText}</div>
               </div>
             </div>
 
-            {/* Dashboard Grid */}
-            <div className="dashboard-grid">
+            {/* DYNAMIC SLIDER & HISTOGRAM */}
+            <div className="chart-card full-width">
+              <div className="slider-header">
+                <h3>Targeting Threshold & Distribution</h3>
+                <div className="slider-value">Min Effect: {minEffect.toFixed(2)}</div>
+              </div>
+              <input type="range" className="modern-slider" min="-0.1" max="0.2" step="0.01" value={minEffect} onChange={(e) => setMinEffect(Number(e.target.value))} />
               
-              {/* Histogram Full Width */}
-              <div className="chart-panel full-width">
-                <h3 className="panel-title">ITE Distribution</h3>
-                <div className="histogram">
-                  {histogram.map((b, i) => (
-                    <div key={i} className="bar"
+              <div className="histogram">
+                {histogram.map((b, i) => {
+                  const isTargeted = b.start >= minEffect;
+                  return (
+                    <div key={i} className={`bar ${isTargeted ? 'bar-active' : 'bar-inactive'}`}
                       title={`${b.start.toFixed(3)}: ${b.count}`}
                       style={{ height: `${(b.count / maxCount) * 100}%` }} />
-                  ))}
-                </div>
+                  );
+                })}
               </div>
+            </div>
 
-              {/* Side by Side Plots */}
-              <div className="chart-panel">
+            {/* CHARTS GRID */}
+            <div className="charts-grid">
+              <div className="chart-card">
                 <Plot
                   data={[
-                    { x: curve?.x, y: curve?.values, type: 'scatter', mode: 'lines+markers', name: 'AI Strategy', marker: {color: '#4f46e5'} },
-                    { x: curve?.x, y: curve?.random, type: 'scatter', mode: 'lines', line: { dash: 'dash', color: '#94a3b8' }, name: 'Random' },
+                    { x: curve?.x, y: curve?.values, type: 'scatter', mode: 'lines', name: 'AI Strategy', line: { color: '#6366f1', width: 3 }, fill: 'tozeroy', fillcolor: 'rgba(99, 102, 241, 0.1)' },
+                    { x: curve?.x, y: curve?.random, type: 'scatter', mode: 'lines', line: { dash: 'dash', color: '#94a3b8', width: 2 }, name: 'Random' },
                   ]}
-                  layout={{ title: 'Targeting Curve', margin: { l: 40, r: 20, t: 40, b: 40 }, autosize: true, height: 300 }}
+                  layout={{ title: { text: 'Cumulative Incremental Revenue', font: { family: 'Inter', size: 16 } }, margin: { l: 50, r: 20, t: 50, b: 40 }, autosize: true, height: 320, plot_bgcolor: 'transparent', paper_bgcolor: 'transparent' }}
                   useResizeHandler style={{ width: '100%' }} config={{ displayModeBar: false }}
                 />
               </div>
 
-              <div className="chart-panel">
+              <div className="chart-card">
                 <Plot
                   data={[
-                    { x: deciles?.map(d=>d.label), y: deciles?.map(d=>d.uplift), type: 'bar', marker: { color: deciles?.map(d => d.uplift >= 0 ? '#10b981' : '#ef4444') } },
+                    { x: deciles?.map(d=>d.label), y: deciles?.map(d=>d.uplift), type: 'bar', marker: { color: deciles?.map(d => d.uplift >= 0 ? '#10b981' : '#f43f5e'), borderRadius: 4 } },
                   ]}
-                  layout={{ title: 'Uplift by Decile', margin: { l: 40, r: 20, t: 40, b: 40 }, autosize: true, height: 300 }}
+                  layout={{ title: { text: 'Observed Uplift by Decile', font: { family: 'Inter', size: 16 } }, margin: { l: 50, r: 20, t: 50, b: 40 }, autosize: true, height: 320, plot_bgcolor: 'transparent', paper_bgcolor: 'transparent' }}
                   useResizeHandler style={{ width: '100%' }} config={{ displayModeBar: false }}
                 />
               </div>
-
             </div>
 
-            {/* Prescription Table */}
-            <div className="table-panel">
-              <PrescriptionTable />
+            <div className="chart-card full-width" style={{marginTop: '1.5rem'}}>
+               <h3 style={{marginBottom: '1rem', color: '#1e293b'}}>Targeting Prescription</h3>
+               <PrescriptionTable />
             </div>
-          </>
+
+          </div>
         )}
       </main>
     </div>
