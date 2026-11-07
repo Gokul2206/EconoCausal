@@ -1,180 +1,51 @@
-import React, { useState } from 'react';
-import Papa from 'papaparse';
-import { Search, TrendingUp, Upload, ArrowUpDown } from 'lucide-react';
+import React from 'react';
 
-const PrescriptionTable = () => {
-  const [allocations, setAllocations] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [sortConfig, setSortConfig] = useState({ key: 'predicted_effect', direction: 'desc' });
-
-  const AOV = 100; // Match the Python AOV assumption
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    setLoading(true);
-    setError('');
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      Papa.parse(event.target.result, {
-        header: true,
-        dynamicTyping: true,
-        complete: (results) => {
-          const requiredCols = ['customer_id', 'discount', 'cost', 'predicted_effect'];
-          const headers = results.meta.fields || [];
-          const missing = requiredCols.filter(col => !headers.includes(col));
-          
-          if (missing.length > 0) {
-            setError(`Missing columns: ${missing.join(', ')}`);
-            setAllocations([]);
-          } else {
-            setAllocations(results.data.filter(row => row.customer_id));
-          }
-          setLoading(false);
-        },
-        error: (err) => {
-          setError(`Error parsing CSV: ${err.message}`);
-          setLoading(false);
-        }
-      });
-    };
-    reader.readAsText(file);
-  };
-
-  const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const totalSpend = allocations.reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
-  const totalRevenue = allocations.reduce((sum, row) => sum + ((Number(row.predicted_effect) || 0) * AOV), 0);
-  const roi = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend) * 100 : 0;
-  
-  const sortedData = [...allocations].sort((a, b) => {
-    if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const filteredData = sortedData.filter(row => 
-    row.customer_id?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-  );
+export default function PrescriptionTable({ data }) {
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+        <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Awaiting optimization instructions.</p>
+        <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '0.5rem' }}>Run the SciPy Optimizer in the Strategy Simulator tab to generate the final rollout matrix.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="prescription-container">
-      <div className="prescription-header">
-        <div>
-          <h2>Prescription Engine</h2>
-          <p className="hint">Mathematically optimal discount allocations maximizing predicted revenue.</p>
-        </div>
-        
-        <div className="file-upload-box">
-          <label className="file-upload-label">
-            <Upload size={18} />
-            <span>Upload allocation.csv</span>
-            <input 
-              type="file" 
-              accept=".csv" 
-              onChange={handleFileUpload} 
-              style={{ display: 'none' }} 
-            />
-          </label>
-          {error && <p style={{ color: '#d32f2f', fontSize: '0.8rem', marginTop: '5px' }}>{error}</p>}
-        </div>
-      </div>
-
-      <div className="kpi-grid">
-        <div className="kpi-card">
-          <p className="kpi-title">Total Budget Allocated</p>
-          <p className="kpi-value">${totalSpend.toLocaleString()}</p>
-        </div>
-        <div className="kpi-card">
-          <p className="kpi-title">Customers Targeted</p>
-          <p className="kpi-value">{allocations.length.toLocaleString()}</p>
-        </div>
-        <div className="kpi-card">
-          <p className="kpi-title">Predicted Revenue (ROI)</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <p className="kpi-value green">${totalRevenue.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-            <span style={{ color: '#2e7d32', fontWeight: '600', fontSize: '1rem' }}>(+{roi.toFixed(1)}%)</span>
-            <TrendingUp size={24} color="#2e7d32" />
-          </div>
-        </div>
-      </div>
-
-      <div className="table-card">
-        <div className="table-toolbar">
-          <div className="search-wrapper">
-            <Search size={18} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Search Customer ID..."
-              className="search-input"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={allocations.length === 0}
-            />
-          </div>
-        </div>
-
-        <div className="table-responsive">
-          <table className="styled-table">
-            <thead>
-              <tr>
-                <th onClick={() => handleSort('customer_id')} style={{ cursor: 'pointer' }}>
-                  Customer ID <ArrowUpDown size={14} style={{ display: 'inline', marginLeft: '4px' }}/>
-                </th>
-                <th onClick={() => handleSort('discount')} style={{ cursor: 'pointer' }}>
-                  Allocated Discount <ArrowUpDown size={14} style={{ display: 'inline', marginLeft: '4px' }}/>
-                </th>
-                <th onClick={() => handleSort('cost')} style={{ cursor: 'pointer' }}>
-                  Cost <ArrowUpDown size={14} style={{ display: 'inline', marginLeft: '4px' }}/>
-                </th>
-                <th onClick={() => handleSort('predicted_effect')} style={{ cursor: 'pointer' }}>
-                  Predicted Revenue <ArrowUpDown size={14} style={{ display: 'inline', marginLeft: '4px' }}/>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan="4" className="text-center">Loading optimization results...</td></tr>
-              ) : allocations.length === 0 ? (
-                <tr><td colSpan="4" className="text-center">Upload an allocation.csv file to view prescription.</td></tr>
-              ) : filteredData.length === 0 ? (
-                <tr><td colSpan="4" className="text-center">No customers found matching that ID.</td></tr>
-              ) : (
-                filteredData.slice(0, 50).map((row, idx) => (
-                  <tr key={idx}>
-                    <td style={{ fontFamily: 'monospace' }}>{row.customer_id}</td>
-                    <td>
-                      <span className="badge-green">${row.discount} OFF</span>
-                    </td>
-                    <td>${row.cost}</td>
-                    <td style={{ fontWeight: '500' }}>
-                      ${(Number(row.predicted_effect) * AOV).toFixed(2)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          
-          {!loading && filteredData.length > 50 && (
-            <div className="table-footer">
-              Showing first 50 rows of {filteredData.length.toLocaleString()} matching results.
-            </div>
-          )}
-        </div>
-      </div>
+    <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', textAlign: 'left' }}>
+        <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8fafc', zIndex: 1 }}>
+          <tr>
+            <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>Customer ID</th>
+            <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>AI Prescription</th>
+            <th style={{ padding: '0.85rem 1rem', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>Expected Conversion Lift</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+              {/* FIX APPLIED HERE: Added String() to prevent the substring crash */}
+              <td style={{ padding: '0.85rem 1rem', fontFamily: 'monospace', color: '#64748b' }}>{String(row.customer_id).substring(0, 8)}...</td>
+              <td style={{ padding: '0.85rem 1rem' }}>
+                <span style={{ 
+                  padding: '0.25rem 0.75rem', 
+                  borderRadius: '99px', 
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  backgroundColor: row.prescription === 20 ? '#fee2e2' : '#e0e7ff',
+                  color: row.prescription === 20 ? '#b91c1c' : '#4338ca' 
+                }}>
+                  ${row.prescription} Discount
+                </span>
+              </td>
+              <td style={{ padding: '0.85rem 1rem', fontWeight: 600, color: '#059669' }}>
+                +{(row.prescription === 10 ? row.ite_10 * 100 : row.ite_20 * 100).toFixed(1)}%
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
-};
-
-export default PrescriptionTable;
+}

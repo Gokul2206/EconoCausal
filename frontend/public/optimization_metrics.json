@@ -1,0 +1,20 @@
+{
+    "budget": 50000,
+    "aov_assumed": 100,
+    "optimized": {
+        "spend": 50000.0,
+        "customers_funded": 5000,
+        "predicted_repeats": 599.8081023946943,
+        "assumed_revenue": 59980.81023946943
+    },
+    "first_ids_baseline": {
+        "spend": 50000.0,
+        "predicted_repeats": 289.62236368685217
+    },
+    "random_baseline": {
+        "spend_mean": 50000.0,
+        "repeats_mean": 286.74008837009984,
+        "repeats_min": 283.12143371280763,
+        "repeats_max": 289.3271498213734
+    }
+}
